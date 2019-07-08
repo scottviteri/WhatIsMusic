@@ -1,0 +1,271 @@
+#|
+What is music?
+Waves of increasing and decreasing pressure through time in some medium.
+When these waves reach the ear, we more or less translate into frequency domain and perceive sound.
+
+What makes certain waves sound good or bad?
+Generally speaking, constructive interference in the waves sounds good and destructive sounds bad.
+We can predict which waves will constructively interfere and how much by checking the similarity of their overtone series. Namely, if one tone is among the first few overtones of the second tone, the interval will sound consonant.
+
+What gives music emotional qualities?
+Harmonies can tell stories -- namely through the transitions between consonant and tension in the harmonies through time. For example, the feeling of coming home when resolving the tritone in V7 to the consonance of Imaj7. Or the bittersweet introduction of out of key tension in a IV - iv - I minor plagal cadence.
+
+Staying at home too much can be boring and predictable, and does not form too much of a story.
+And since every note is really a chord in frequency domain, we can think of consonance as playing several notes that act like a single one. Conversely, dissonance is the presence of multiple notes.
+
+It is these perspective that lead me to formulate following characterization of harmony. Enjoy!
+|#
+
+(sys:load "/home/scottviteri/LocalSoftware/Extempore/libs/core/instruments.xtm")
+(sys:load "/home/scottviteri/LocalSoftware/Extempore/libs/core/instruments-scm.xtm")
+
+(bind-instrument synth synth_note_c synth_fx)
+(bind-instrument default default_note_c default_fx)
+(bind-instrument organ organ_note_c organ_fx)
+
+(bind-func dsp:DSP
+  (lambda (in time chan dat)
+    (synth in time chan dat)))
+
+(dsp:set! dsp)
+
+(define play-seq
+  (lambda ()
+    (play-note (now) synth 60 100 10000)
+    (play-note (+ (now) 22050) synth 64 100 10000)
+    (play-note (+ (now) 44100) synth 67 100 10000)
+    (play-note (+ (now) (+ 22050 44100)) synth 72 100 10000))
+  )
+
+(play-seq)
+
+(play-note (+ (now) 100) synth 60 100 *second*)
+
+(define chord
+  (lambda (notes)
+    (if (not (null? notes))
+        (begin (play-note (now) synth (car notes) 100 *second*)
+               (chord (cdr notes))))))
+
+(chord '(60 65 68 71))
+
+(bind-func p (lambda ()
+               (xtm_play_note (now) synth 440.0 1.0 44100 0 (zalloc))))
+
+(bind-func play-freq-at-time
+  (lambda (time freq samples)
+    (xtm_play_note time synth freq 1.0 samples 0 (zalloc))))
+
+(play-freq-at-time (now) 440.0 44100)
+
+(car '(1 2))
+
+(bind-func play-freq (lambda (freq:SAMPLE)
+                       (xtm_play_note (now) synth freq 1.0 44100 0 (zalloc))))
+
+(define play-freqs
+  (lambda (freqs)
+    (map play-freq freqs)))
+
+($ (xtm_play_note (now) synth 440.0 1.0 44100 0 (zalloc)))
+(play-freq 330.0)
+(play-freqs '(220.0 330.0))
+
+(define play-ratio
+  (lambda (ratio)
+    (lambda (root)
+        (play-freqs `(,root ,(* ratio root))))))
+
+(define play-freq-sequence
+  (lambda (time freqs)
+    (if (not (null? freqs))
+        (begin
+          (play-freq-at-time time (car freqs) 22050)
+          (callback (+ time 22000) 'play-freq-sequence (+ time 22050) (cdr freqs))))))
+
+(play-freq-sequence (now) '(100.0 200.0 300.0))
+
+(define (mod-add root freq)
+  (let ((next-freq (+ freq root)))
+    (if (> next-freq 1000.0) (/ next-freq 2) next-freq)))
+
+(define (play-harmonic-series-helper time root curr-freq count)
+  (if (> count 0)
+      (begin
+        (play-freq-at-time time curr-freq 44100)
+        (callback (+ time 100)
+                  'play-harmonic-series-helper
+                  (+ time 10000)
+                  root
+                  (mod-add root curr-freq)
+                  (- count 1)))))
+
+(define (play-harmonic-series root count)
+  (play-harmonic-series-helper (now) root root count))
+
+(play-harmonic-series 100.0 8)
+((play-ratio (/ 3 2)) 220.0)
+
+#|
+Mixing chords to create new chords is a bit like mixing colors to create new ones.
+The difference being that the chord mixing is parameterized by the ratio between the roots of the respective chords. So mix : ratio -> chord -> chord -> chord. Remember that a note can be treated as a chord.
+
+An interval is a relationship between a pair of notes. We can build up chords as intervals from the root or as intervals between each subsequent note.
+Can define intervals as operations that produce two notes from a root.
+#|
+(define (U root) root)
+(define (m3 ch1 ch2) (lambda (root) `(,(ch1 root) ,(ch2 (+ 3 root)))))
+(define (M3 ch1 ch2) (lambda (root) `(,(ch1 root) ,(ch2 (+ 4 root)))))
+(define (P5 ch1 ch2) (lambda (root) `(,(ch1 root) ,(ch2 (+ 7 root)))))
+(define (M7 ch1 ch2) (lambda (root) `(,(ch1 root) ,(ch2 (+ 11 root)))))
+(define (equal-temp-make-interval half-steps)
+  (lambda (ch1 ch2) (lambda (root) `(,(ch1 root) ,(ch2 (+ half-steps root))))))
+
+#|
+
+Consider Imaj7. Could define as (unison, M3, P5, M7), as as two fifths a M3 apart.
+
+    M3
+  /   \
+ P5   P5
+/ \  / \
+U U  U  U
+
+(M3 (P5 U U) (P5 U U)) 0 -> '((0 7) (4 11))
+
+or
+
+  P5
+ /  \
+M3  M3
+/\  /\
+U U U U
+
+(P5 (M3 U U) (M3 U U)) 0 -> '((0 4) (7 11))
+
+or
+
+  M3
+/    \
+U    m3
+    /  \
+   U   M3
+       /\
+      U  U
+
+(M3 U (m3 U (M3 U U))) 0 -> '(0 (4 (7 11)))
+
+or
+
+    M7
+   / \
+  P5  U
+ / \
+M3  U
+/\
+UU
+
+(M7 (P5 (M3 U U) U) U) 0 -> '(((0 4) 7) 11)
+
+In 12 tone equal temperament this is (+0, +4, +7, +10)
+
+What if we thought of a chord, not a flat collection of notes as a sequence of pairs of chords "mixed" by and interval.
+
+|#
+
+(define (flatten x)
+  (cond ((null? x) '())
+        ((pair? x) (append (flatten (car x)) (flatten (cdr x))))
+        (else (list x))))
+
+(define (play-equal-temp chrd)
+  (chord (flatten chrd)))
+
+(define Imaj7
+  (M3 (P5 U U) (P5 U U)))
+(define m3 (equal-temp-make-interval 3))
+(define Imaj7'
+  (M3 U (m3 U (M3 U U))))
+
+((m3 U U) 10)
+(Imaj7' 60)
+
+(play-equal-temp (Imaj7 60))
+(play-equal-temp (Imaj7' 60))
+
+
+#|
+
+Right now different definitions sound the same.
+But what if we used just tuning?
+
+In in 5-limit just tuning this is (*1, *5/4, *3/2, *15/8).
+
+Might change if I use different intervals? -- not sure
+Try with the seventh (might not commute)
+
+|#
+(define (U root) root)
+(define (M3 ch1 ch2) (lambda (root) `(,(ch1 root) ,(ch2 (* (/ 5 4) root)))))
+(define (P5 ch1 ch2) (lambda (root) `(,(ch1 root) ,(ch2 (* (/ 3 2) root)))))
+(define (M7 ch1 ch2) (lambda (root) `(,(ch1 root) ,(ch2 (* (/ 15 8) root)))))
+(define (just-tuning-make-interval ratio)
+  (lambda (ch1 ch2) (lambda (root) `(,(ch1 root) ,(ch2 (* ratio root))))))
+(define m3 (just-tuning-make-interval (/ 6 5)))
+
+(define Imaj7
+  (M3 (P5 U U) (P5 U U)))
+(define Imaj7'
+  (M3 U (m3 U (M3 U U))))
+
+(flatten (Imaj7 440.0))
+(flatten (Imaj7' 440.0))
+
+(play-freqs (flatten (Imaj7 330.0)))
+(play-freqs (flatten (Imaj7' 330.0)))
+
+
+#|
+
+Why did I go through the trouble of defining chords in terms of a tree structure?
+Because I believe this representations makes the following perspective on chord analysis easier to explain:
+
+Consider the following two reps of Imaj7.
+
+    M3
+  /   \
+ P5   P5
+/ \  / \
+U U  U  U
+
+(M3 (P5 U U) (P5 U U))
+
+  P5
+ /  \
+M3  M3
+/\  /\
+U U U U
+
+(P5 (M3 U U) (M3 U U))
+
+Do we hear Imaj7 more as two fifths separated by an M3, or vice versa.
+I would posit that we here the first representation -- two P5's separated by an M3.
+This is because the P5 notes are more harmonious and therefore ACT MORE LIKE THE SAME NOTE.
+
+Another way of saying this is that we can represent most of the harmonic content of Imaj7 in terms of the root and the M3, as opposed to the root and the fifth.
+Similarly I prefer to write i7 as
+    m3
+   / \
+  P5 P5
+ / \ / \
+U  U U  U
+
+For any chord, we should write it down in such a way that capture the most harmonic information possible higher on the tree.
+
+Can we devise an algorithm for generating this optimal analysis tree from the flattened chord?
+Do operations on this tree correspond to well known operations in music theory?
+Can normal music theory be explained in terms of these trees?
+
+Stay tuned to find out! :)
+
+#|
