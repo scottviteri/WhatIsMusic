@@ -374,9 +374,49 @@ return available-notes[min(chord)]
 (tree-cost '(((0 7) 4) 10)) -- 15
 (tree-cost '((0 4) (7 10))) -- 12 <-- did not pick best here
 -- maybe could bias toward building balanced trees, but for now, good enough
+-- should try more test cases with left parenthesization
+
+(define (in-keys? object alist)
+  (in? object (map car alist)))
 
 (define (note-tree-to-intervals note-tree)
-  ()
-  )
+  (if (pair? note-tree)
+      (let* ((fst (car note-tree))
+             (snd (car (cdr note-tree)))
+             (interval-names '((0 . U) (1 . m2) (2 . M2)
+                               (3 . m3) (4 . M3) (5 . P4)
+                               (6 . TT) (7 . P5) (8 . m6)
+                               (9 . M6) (10 . m7) (11 . M7)
+                               (12 . Oct)))
+             (interval-num (- (deep-car snd) (deep-car fst))))
 
-(note-tree-to-intervals '((0 7) (4 11))) --  (4 (7 U U) (7 U U))
+        (cons (if (in-keys? interval-num interval-names)
+                  (assoc-ref interval-num interval-names)
+                  interval-num)
+              (list (note-tree-to-intervals fst) (note-tree-to-intervals snd))))
+      'U))
+
+(note-tree-to-intervals '((0 7) (4 11))) --  (M3 (P5 U U) (P5 U U))
+
+(define (compose g f)
+  (lambda (x) (g (f x))))
+
+(define get-interval-tree
+  (compose note-tree-to-intervals parenthesize))
+
+(get-interval-tree '(0 4 7 11)) -- (M3 (P5 U U) (P5 U U))
+(get-interval-tree '(0 4 7)) -- (M3 (P5 U U) U)
+-- a major triad is made up of primary two pieces: the root-fifth combination and the M3
+
+(get-interval-tree '(0 3 7 10)) -- (m3 (P5 U U) (P5 U U))
+-- a minor 7th chord is made up of two fifths, starting at the root and m3, respectively
+
+(get-interval-tree '(0 2 5 7))  -- (M2 (P4 (P5 U U) U) U)
+-- this weird chord is not made up of two P4's as I had guessed
+-- rather it is closer to a 1-4-5 chord with an added M2
+-- notice for instance, that holding down 1-4-5 and adding the 2 changes the sound more than holding down 1-2-5 and adding the 4
+
+-- (the dissonance gives the flavor)
+(get-interval-tree '(0 4 7 10)) -- (m7 (M3 (P5 U U) U) U)
+-- the better analysis is a M3 and a m3 separated by a fifth
+-- the heuristic instead picks up a major triad + a m7
