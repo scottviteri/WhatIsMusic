@@ -1,0 +1,321 @@
+(sys:load "/home/scottviteri/LocalSoftware/Extempore/libs/core/instruments.xtm")
+(sys:load "/home/scottviteri/LocalSoftware/Extempore/libs/core/instruments-scm.xtm")
+
+(bind-instrument synth synth_note_c synth_fx)
+(bind-func dsp:DSP
+  (lambda (in time chan dat)
+    (synth in time chan dat)))
+
+(dsp:set! dsp)
+
+(define play-chord
+  (lambda (notes)
+    (if (not (null? notes))
+        (begin (play-note (now) synth (car notes) 100 *second*)
+               (play-chord (cdr notes))))))
+
+(play-chord '(60 64 67 71))
+
+(define (equal-temp-make-interval half-steps)
+  (lambda (ch1 ch2) (lambda (root) `(,(ch1 root) ,(ch2 (+ half-steps root))))))
+
+(define (U root) root)
+(define m3 (equal-temp-make-interval 3))
+(define M3 (equal-temp-make-interval 4))
+(define P4 (equal-temp-make-interval 5))
+(define P5 (equal-temp-make-interval 7))
+(define M7 (equal-temp-make-interval 11))
+
+(define (flatten x)
+  (cond ((null? x) '())
+        ((pair? x) (append (flatten (car x)) (flatten (cdr x))))
+        (else (list x))))
+
+(define (play-equal-temp chrd)
+  (play-chord (flatten chrd)))
+
+(define Imaj7
+  (M3 (P5 U U) (P5 U U)))
+(define Imaj7'
+  (P5 (M3 U U) (M3 U U)))
+(define Imaj7''
+  (M3 U (m3 U (M3 U U))))
+(define Imaj7'''
+  (M7 (P5 (M3 U U) U) U))
+
+
+(Imaj7' 60)
+(Imaj7'' 60)
+(Imaj7''' 60)
+
+
+(play-equal-temp (Imaj7 60))
+(play-equal-temp ((P5 U U) 60))
+(play-equal-temp (U 60))
+
+
+#|
+How to make an algorithm that takes a list of pitches and derives a optimal tree?
+Naive algo -- consider all pairwise intervals.
+
+What would be a proper scoring function on the trees?
+Want notion of how dissonant/consonant an interval is.
+I believe that it would depend on the harmonic spectrum of a particular instrument.
+
+Maybe consonance can be measured by the similarity of the Fourier spectrum.
+So dissonance would be measured by taking the sum of the subtraction of the normalized spectra over all freq bins.
+This metric would change based on the particular instrument, which very well might be desired.
+It makes sense that certain intervals might be more or less dissonant on different instruments due to differing tambor.
+
+But for this analysis I want a consonance metric that is invariant on the particular instrument.
+Also, there is something missing from the notion of just subtracting the spectra: and octaves sounds similar even as pure sign waves.
+
+An easy instrument irrelevent metric would just be as follows:
+
+Unison: 0
+Octave: 1
+P5: 2
+P4: 3
+M3: 4
+M6: 5
+m3: 6
+m6: 7
+m7: 8
+M2: 9
+m2: 10
+M7: 11
+TT: 12
+
+Could maybe extend past octave by adding 1 cost for each octave.
+Adding, because the farther apart the notes are, the more they are distinguishable.
+
+|#
+
+(define (cost num-half-steps)
+  (+ (quotient num-half-steps 12)
+     (cdr
+      (assoc (remainder num-half-steps 12)
+            '((0 . 0)
+              (7 . 2)
+              (5 . 3)
+              (4 . 4)
+              (9 . 5)
+              (3 . 6)
+              (8 . 7)
+              (2 . 8)
+              (1 . 9)
+              (11 . 10)
+              (6 . 11))))))
+
+-- (cost 13) -> 10 = 1 + 9 = octave + m2
+(cost 13)
+(cost 0)
+(cost 36)
+
+#|
+How to get the cost of the whole tree?
+
+    M3
+  /   \
+ P5   P5
+/ \  / \
+U U  U  U
+
+'((0 7) (4 11))
+'(
+
+|#
+
+(define (deep-car pair)
+  (if (pair? pair)
+      (deep-car (car pair))
+      pair))
+
+(deep-car 0) -- 0
+(deep-car '(0 7)) -- 0
+(deep-car '((0 7) (4 11))) -- 0
+(deep-car (Imaj7'' 0)) -- 0
+(deep-car (Imaj7''' 0)) -- 0
+
+(define (tree-cost tree)
+  (if (pair? tree)
+      (let ((fst (car tree))
+            (snd (car (cdr tree))))
+        (+ (tree-cost fst)
+           (tree-cost snd)
+           (cost (- (deep-car snd) (deep-car fst)))))
+      0))
+
+(Imaj7 60) -- '((60 67) (64 71))
+(Imaj7' 60) -- '((60 64) (67 71))
+(tree-cost '(60 67)) -- 2
+(tree-cost '((60 67) (64 71))) -- 8
+(tree-cost '((60 64) (67 71))) -- 10
+
+#|
+
+Now we can consider all possible trees on the given set of notes, and simply pick the one with lowest cost.
+
+Consider the major triad for enumeration.
+|#
+
+((M3 U (m3 U U)) 0) -- '(0 (4 7))
+((P5 (M3 U U) U) 0) -- '((0 4) 7)
+-- what about '((0 7) 4)?
+((M3 (P5 U U) U) 0) -- '((0 7) 4)
+-- I think this is all of them
+
+(map tree-cost '((0 (4 7))
+                 ((0 4) 7)
+                 ((0 7) 4))) -- last two have smaller costs
+-- the number of binary trees with three leaves is only two
+
+-- back to Imaj7
+((M3 (P5 U U) (P5 U U)) 0) -- '((0 7) (4 11)) <-- three poss with this parenthesization
+((P5 (M3 U U) (M3 U U)) 0) -- '((0 4) (7 11))
+((M3 U (m3 U (M3 U U))) 0) -- '(0 (4 (7 11))) <-- only possible with this parenthesization
+((M7 (P5 (M3 U U) U) U) 0) -- '(((0 4) 7) 11)
+
+-- some more
+((M7 (M3 (P5 U U) U) U) 0) -- '(((0 7) 4) 11) <-- 3! with this parenthesization
+((M3 U (P5 (m3 U U) U)) 0) -- '(0 ((4 7) 11))
+((M7 (M3 U (m3 U U)) U) 0) -- '((0 (4 7)) 11)
+((M3 (M7 U U) (m3 U U)) 0) -- '((0 11) (4 7)) <-- outside to inside intervals ((M3 (P5 U (M3 U U)) U) 0) -- '((0 (7 11)) 4)
+-- there are likely way more
+
+(map tree-cost '(((0 7) (4 11))
+                 ((0 4) (7 11))
+                 (0 (4 (7 11)))
+                 (((0 4) 7) 11)
+                 (((0 7) 4) 11)
+                 (0 ((4 7) 11))
+                 ((0 (4 7)) 11)
+                 ((0 11) (4 7))
+                 ((0 (7 11)) 4))) -- best measure is from '((0 7) (4 11)) as expected
+
+#|
+Only rule is that deep-car's must be increasing.
+Can only make pairs as opposed to longer lists.
+Though the number of branches can vary, the number of leaves must equal the number of notes.
+The number of trees is invariant on our particular choice of notes.
+
+This number probably blows up really quickly.
+Consider the following greedy algo:
+built_trees = '() <-- assoc list of left-most leaf to tree
+available_notes = (flat list of notes in chord) -- eg '(0 7 4 11)
+while len(available_notes) > 1:
+  note_pairs = '((a,b) in (available_notes * available_notes) st a < b)
+  interval = (most consonant interval with a match in note_pairs)
+  matched_note_pair = (some note_pair '(a,b) st b - a == interval)
+
+  if ((a in built_trees.keys()) and (b in built_trees.keys())):
+    built_trees[a] = (list built_trees[a] built_trees[b])
+    available_notes.remove(b)
+  elif (a in built_trees.keys()):
+    built_trees[a] = (list built_trees[a] b)
+    available_notes.remove(b)
+  elif (b in built_trees.keys()):
+    built_trees[b] = (list b build_trees[a])
+    built_trees.remove(a)
+    available_notes.remove(a)
+    available_notes.append(b)
+  else:
+    build_trees[a] = (list a b)
+    available_notes.remove(b)
+
+return available_notes[min(chord)]
+|#
+
+(define (assoc-ref key assoc_list)
+  (cdr (assoc key assoc_list)))
+
+(assoc-ref 0 '((0 . 1)))
+
+
+(define (fold-right f init seq)
+  (if (null? seq)
+      init
+      (f (car seq)
+         (fold-right f init (cdr seq)))))
+
+(define (list-min lst)
+  (fold-right min 1000000 lst))
+
+(list-min '(2 4 1 3))
+
+(define (shallow-flatten lst_of_lsts)
+  (fold-right append '() lst_of_lsts))
+
+(shallow-flatten '((1 2) (3 4) (5 (6 7)))) -- (1 2 3 4 5 (6 7))
+
+(define (product l1 l2)
+  (define (create-pairs elem lst)
+    (map (lambda (l2_elem) `(,elem . ,l2_elem)) lst))
+  (shallow-flatten (map (lambda (l1_elem) (create-pairs l1_elem l2)) l1)))
+
+(product '(1 2) '(3 4)) -- ((1 . 3) (1 . 4) (2 . 3) (2 . 4))
+
+(define (ordered? pair) (< (car pair) (cdr pair)))
+(ordered? '(1 . 2)) -- #t
+(ordered? '(2 . 1)) -- #f
+(define (get-note-pairs chord)
+  (filter ordered? (product chord chord)))
+
+(get-note-pairs '(0 4 7)) -- ((0 . 4) (4 . 7) (0 . 7))
+(get-note-pairs '(0 4 7 11)) -- ((0 . 4) (0 . 7) (0 . 11) (4 . 7) (4 . 11) (7 . 11))
+
+
+(define (make-intervals-list num-octaves)
+ (define (make-intervals-list-helper orig num-octaves num-iters accum)
+   (if (> num-octaves 0)
+       (make-intervals-list-helper orig (- num-octaves 1) (+ num-iters 1)
+                                   (append accum (map (lambda (x) (+ x (* 12 num-iters))) orig)))
+       accum))
+ (make-intervals-list-helper '(0 7 5 4 9 3 8 2 1 11 6) num-octaves 0 '()))
+
+(make-intervals-list 2)
+
+(define (get-matched-note-pair note_pairs intervals)
+  (if (null? intervals) '()
+      (let* ((interval (car intervals))
+             (matches (filter (lambda (p) (= interval (- (cdr p) (car p)))) note_pairs)))
+        (if (null? matches)
+            (get-matched-note-pair note_pairs (cdr intervals))
+            (car matches)))))
+
+(get-matched-note-pair '((1 . 2) (2 . 4)) '(3 2)) -- '(2 . 4)
+
+(define (logical-or p q)
+  (cond (p #t)
+        (q #t)
+        (else #f)))
+
+(logical-or #t #f)
+(logical-or #f #f)
+(logical-or #t #t)
+
+(define (logical-and p q)
+  (if p (if q #t #f) #f))
+
+(define (in? elem lst)
+  (fold-right (lambda (y x) (logical-or x (= y elem))) #f lst))
+
+(in? 1 '(2 1 3)) -- #t
+(in? 4 '(2 1 3)) -- #f
+
+(define (parenthesize chord)
+  ((define (parenthesize-helper built_trees available_notes)
+     (if (> (length available_notes) 1)
+         (let* ((note_pairs (get-note-pairs available_notes))
+                (intervals (make-intervals-list 2))
+                (matched-note-pair (get-matched-note-pair note-pairs intervals))
+                (a (car matched-note-pair))
+                (b (cdr matched-note-pair))
+                (built-tree-keys (map car built_trees)))
+           (cond ((logical-and (in? a built-tree-keys) (in? b built-tree-keys))
+
+
+                  )
+           )
+           (assoc-ref (car available_notes) built_trees))
+    (parenthesize-helper '() chord))))

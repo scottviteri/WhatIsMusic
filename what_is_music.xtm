@@ -49,9 +49,6 @@ It is these perspective that lead me to formulate following characterization of 
 
 (chord '(60 65 68 71))
 
-(bind-func p (lambda ()
-               (xtm_play_note (now) synth 440.0 1.0 44100 0 (zalloc))))
-
 (bind-func play-freq-at-time
   (lambda (time freq samples)
     (xtm_play_note time synth freq 1.0 samples 0 (zalloc))))
@@ -103,7 +100,7 @@ It is these perspective that lead me to formulate following characterization of 
 (define (play-harmonic-series root count)
   (play-harmonic-series-helper (now) root root count))
 
-(play-harmonic-series 100.0 8)
+(play-harmonic-series 100.0 5)
 ((play-ratio (/ 3 2)) 220.0)
 
 #|
@@ -216,13 +213,13 @@ Try with the seventh (might not commute)
 (define Imaj7
   (M3 (P5 U U) (P5 U U)))
 (define Imaj7'
-  (M3 U (m3 U (M3 U U))))
+  (M7 (P5 (M3 U U) U) U))
 
 (flatten (Imaj7 440.0))
 (flatten (Imaj7' 440.0))
 
-(play-freqs (flatten (Imaj7 330.0)))
-(play-freqs (flatten (Imaj7' 330.0)))
+(play-freqs (flatten (Imaj7 220.0)))
+(play-freqs (flatten (Imaj7' 220.0)))
 
 
 #|
@@ -248,7 +245,7 @@ U U U U
 
 (P5 (M3 U U) (M3 U U))
 
-Do we hear Imaj7 more as two fifths separated by an M3, or vice versa.
+Do we hear Imaj7 more as two fifths separated by an M3, or vice versa?
 I would posit that we here the first representation -- two P5's separated by an M3.
 This is because the P5 notes are more harmonious and therefore ACT MORE LIKE THE SAME NOTE.
 
