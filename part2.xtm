@@ -20,11 +20,20 @@
   (lambda (ch1 ch2) (lambda (root) `(,(ch1 root) ,(ch2 (+ half-steps root))))))
 
 (define (U root) root)
+(define m2 (equal-temp-make-interval 1))
+(define M2 (equal-temp-make-interval 2))
 (define m3 (equal-temp-make-interval 3))
 (define M3 (equal-temp-make-interval 4))
 (define P4 (equal-temp-make-interval 5))
+(define TT (equal-temp-make-interval 6))
 (define P5 (equal-temp-make-interval 7))
+(define m6 (equal-temp-make-interval 8))
+(define M6 (equal-temp-make-interval 9))
+(define m7 (equal-temp-make-interval 10))
 (define M7 (equal-temp-make-interval 11))
+(define P8 (equal-temp-make-interval 12))
+(define m9 (equal-temp-make-interval 13))
+(define M9 (equal-temp-make-interval 14))
 
 (define (flatten x)
   (cond ((null? x) '())
@@ -43,16 +52,42 @@
 (define Imaj7'''
   (M7 (P5 (M3 U U) U) U))
 
-
+(Imaj7 60)
 (Imaj7' 60)
 (Imaj7'' 60)
 (Imaj7''' 60)
 
-
-(play-equal-temp (Imaj7 60))
-(play-equal-temp ((P5 U U) 60))
 (play-equal-temp (U 60))
+(play-equal-temp ((P5 U U) 60))
+(play-equal-temp (Imaj7 60))
 
+#|
+You can also think of the trees as different ways of splitting the chord up into two explanatory subchords. I am considering the best explanation to be the one where the component chords sound as simple or consonant as possible.
+
+To build some intuition for the difference between trees, we can play both subtrees after one another.
+|#
+
+(define (play-chord-at-time time notes)
+  (if (not (null? notes))
+      (begin (display (car notes))
+             (play-note time synth (car notes) 80 *second*)
+             (play-chord-at-time time (cdr notes)))))
+
+(play-chord-at-time (now) '(60 63 67 70))
+
+(define (snd lst)
+  (car (cdr lst)))
+
+(define (play-chord-components notes-tree)
+  (play-chord-at-time (now) (flatten (car notes-tree)))
+  (play-chord-at-time (+ *second* (now)) (flatten (snd notes-tree)))
+  (play-chord-at-time (+ (* 2 *second*) (now)) (flatten notes-tree)))
+
+(play-chord-components '((60 67) (64 71)))
+(play-chord-components (Imaj7 60))
+(play-chord-components (Imaj7' 60))
+(play-chord-components (Imaj7'' 60))
+(play-chord-components (Imaj7''' 60))
 
 #|
 How to make an algorithm that takes a list of pitches and derives a optimal tree?
@@ -80,8 +115,8 @@ M3: 4
 M6: 5
 m3: 6
 m6: 7
-m7: 8
-M2: 9
+M2: 8
+m7: 9
 m2: 10
 M7: 11
 TT: 12
@@ -137,20 +172,26 @@ U U  U  U
 (deep-car (Imaj7'' 0)) -- 0
 (deep-car (Imaj7''' 0)) -- 0
 
-(define (tree-cost tree)
-  (if (pair? tree)
-      (let ((fst (car tree))
-            (snd (car (cdr tree))))
+(define (tree-cost note-tree)
+  (if (pair? note-tree)
+      (let ((fst (car note-tree))
+            (snd (car (cdr note-tree))))
         (+ (tree-cost fst)
            (tree-cost snd)
            (cost (- (deep-car snd) (deep-car fst)))))
       0))
+
+(define (intervals-cost interval-tree)
+  (tree-cost (interval-tree 0)))
 
 (Imaj7 60) -- '((60 67) (64 71))
 (Imaj7' 60) -- '((60 64) (67 71))
 (tree-cost '(60 67)) -- 2
 (tree-cost '((60 67) (64 71))) -- 8
 (tree-cost '((60 64) (67 71))) -- 10
+
+(play-chord-components '((60 67) (64 71)))
+(play-chord-components '((60 64) (67 71)))
 
 #|
 
@@ -301,20 +342,24 @@ return available-notes[min(chord)]
 (in? 1 '(2 1 3)) -- #t
 (in? 4 '(2 1 3)) -- #f
 
+(define (deep-map f lst-of-lsts)
+  (define (deep-map-helper f)
+    (lambda (lst-of-lsts)
+      (if (list? lst-of-lsts)
+          (map (deep-map-helper f) lst-of-lsts)
+          (f lst-of-lsts))))
+  ((deep-map-helper f) lst-of-lsts))
+
+(deep-map (lambda (x) (+ x 1)) '(1 ((2 3) 4))) -- (2 ((3 4) 5))
 
 (define (delq elem lst)
-  (filter (lambda (x) (not (= x elem))) lst))
+  (filter (lambda (x) (not (eq? x elem))) lst))
 
 (delq 1 '(2 1 1 3))
-
 (delq 'b '(a b c d))
+
 (get-note-pairs '(1 3 4 5))
 (make-intervals-list 1)
-(let ((pair (get-matched-note-pair (get-note-pairs '(1 3 4 5)) (make-intervals-list 1))))
-  (cdr pair))
-
-(let ((a 1))
-  (cons (cons a 2) '()))
 
 (define (del-assoc object alist)
   (filter (lambda (p) (not (= object (car p)))) alist))
@@ -357,6 +402,7 @@ return available-notes[min(chord)]
 
     (parenthesize-helper '() chord))
 
+
 (parenthesize '(0 4 7 11)) -- ((0 7) (4 11))
 (parenthesize '(0 4 11 7)) -- ((0 7) (4 11))
 (parenthesize '(11 7 0 4)) -- ((0 7) (4 11))
@@ -365,16 +411,26 @@ return available-notes[min(chord)]
 (tree-cost '((0 7) 4))
 (tree-cost '(0 (4 7))) -- chose the better one
 
+(define (plus60 x) (+ x 60))
+(play-chord-components (deep-map plus60 '((0 7) 4)))
+(play-chord-components (deep-map plus60 '(0 (4 7))))
+-- the first sounds more like two different individual notes being added together
+-- as opposed to two different chords added together
+
 (parenthesize '(0 3 7 10)) -- ((0 7) (3 10))
+-- min7 is two fifths separated by an m3
+
 (parenthesize '(0 2 5 7))  -- (((0 7) 5) 2)
 (tree-cost '(((0 7) 5) 2)) -- 12 <-- chose the better one
 (tree-cost '((0 5) (2 7))) -- 13
+
 
 (parenthesize '(0 4 7 10)) -- (((0 7) 4) 10)
 (tree-cost '(((0 7) 4) 10)) -- 15
 (tree-cost '((0 4) (7 10))) -- 12 <-- did not pick best here
 -- maybe could bias toward building balanced trees, but for now, good enough
 -- should try more test cases with left parenthesization
+-- If someone can figure out how to brute force this algorithm I will happily accept a pull request
 
 (define (in-keys? object alist)
   (in? object (map car alist)))
@@ -415,8 +471,147 @@ return available-notes[min(chord)]
 -- this weird chord is not made up of two P4's as I had guessed
 -- rather it is closer to a 1-4-5 chord with an added M2
 -- notice for instance, that holding down 1-4-5 and adding the 2 changes the sound more than holding down 1-2-5 and adding the 4
+-- this one is debatable and will be relatively sensitive to our particular cost metric
+-- our metric is not considering the fourths harmonious enough to prefer over the first interpretation
+-- here are the two versions played side by side
+
+(play-chord-components (deep-map plus60 '(((0 7) 5) 2)))
+(play-chord-components (deep-map plus60 '((0 5) (2 7))))
+
 
 -- (the dissonance gives the flavor)
 (get-interval-tree '(0 4 7 10)) -- (m7 (M3 (P5 U U) U) U)
 -- the better analysis is a M3 and a m3 separated by a fifth
 -- the heuristic instead picks up a major triad + a m7
+
+(define (get-intervals-and-play chord)
+  (play-chord-components ((eval (get-interval-tree chord)) (list-min chord))))
+
+(get-intervals-and-play (deep-map plus60 '(0 4 7 10)))
+
+
+-- I11
+(get-interval-tree '(0 4 7 10 14 17)) -- (m7 (M3 (P5 U U) U) (M3 (P5 U U) U))
+
+#|
+I11
+
+       m7
+      /  \
+     M3   M3
+    / \   / \
+   P5  U  P5 U
+  / \    / \
+ U   U   U  U
+
+Remember that the tree for the major triad "I" looked like the following:
+
+    M3
+   / \
+  P5  U
+ / \
+U   U
+
+AKA the root and the 3rd are the most important notes in the triad, because the fifth is more redundant.
+We can then write I11 as:
+
+   m7
+  / \
+ I   I
+
+AKA two major triads separated by a minor seventh.
+
+#|
+
+-- Here it is played aloud
+(get-intervals-and-play (deep-map plus60 '(0 4 7 10 14 17)))
+
+|#
+
+What if we added the 13 into the mix?
+
+|#
+
+-- I13
+(get-interval-tree '(0 4 7 10 14 17 21)) -- (m7 (M3 (P5 U U) U) (M3 (P5 U U) (P5 U U)))
+
+|#
+
+    m7
+   / \
+  I   M3
+     / \
+    P5  P5
+   / \  / \
+  U   U U  U
+
+But we've seen that shape on the right before.
+It is our preferred tree representation of Imaj7.
+
+  m7
+ / \
+I   Imaj7
+
+So a good description of I13 is a major triad and a maj7 chord separated by a m7.
+
+#|
+
+-- here it is played aloud
+
+(define I
+  (M3 (P5 U U) U))
+(define Imaj7
+  (M3 (P5 U U) (P5 U U)))
+
+(intervals-cost (m7 I Imaj7)) -- 23
+((m7 I Imaj7) 50)
+(play-chord-components ((eval (m7 I Imaj7)) 55))
+
+#|
+
+Note that this is not quite my characterization of the mixolydian scale because here octave differences are relevant (because they add to distinguishability of notes).
+When I run the algorithm on the mixolydian scale I get the following:
+|#
+
+(get-interval-tree '(0 2 4 5 7 9 10)) -- (M2 (M3 (P4 (P5 U U) U) U) (m6 (P5 U U) U))
+(intervals-cost (M2 (M3 (P4 (P5 U U) U) U) (m6 (P5 U U) U))) -- 26
+(play-chord-components ((M2 (M3 (P4 (P5 U U) U) U) (m6 (P5 U U) U)) 55))
+
+-- what if I tried to characterize in terms of (M2 I7 I)?
+(get-interval-tree '(0 4 7 10))
+(define I7
+  (m7 (M3 (P5 U U) U) U))
+(intervals-cost (M2 I7 I)) -- 29
+
+-- so the decomposition I find is better than (M2 I7 I)
+-- this is because the dom 7 is pretty dissonant
+-- that said, if I7 was derived as M3 and m3 apart by P5, then the cost would be 3 less
+-- so in that sense should be equally good, though the dom 7 split sounds more right to my ear
+(play-chord-components ((eval (M2 I7 I)) 55))
+
+|#
+What about regular Aeolian?
+Check against (M2 Imaj7 i).
+#|
+
+(get-interval-tree '(0 2 4 5 7 9 11)) -- (M2 (M3 (P4 (P5 U U) U) (P5 U U)) (P5 U U))
+(intervals-cost (eval (get-interval-tree '(0 2 4 5 7 9 11)))) -- 21
+(get-intervals-and-play (map plus60 '(0 2 4 5 7 9 11)))
+
+(get-interval-tree '(0 3 7)) -- (m3 (P5 U U) U)
+(define i
+  (m3 (P5 U U) U))
+(intervals-cost (M2 Imaj7 i)) -- 24
+(play-chord-components ((eval (M2 Imaj7 i)) 60))
+
+-- the algorithm found a lower cost version than (M2 Imaj7 i)
+
+#|
+
+It is not finding the most intuitive explanations of scales, but that could very well be because there actually are no great ways to break up a scale sequence into consonant chunks.
+
+The results for chords so far seem to be working well, and following my intuition to some degree.
+
+In part3.xtm we will see how operations on these trees reflect into regular music theory.
+
+#|

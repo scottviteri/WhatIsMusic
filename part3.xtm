@@ -1,0 +1,49 @@
+#|
+
+In what_is_music.xtm I layed out a general plan for exploring this information-centric version of harmonic analysis:
+
+Can we devise an algorithm for generating this optimal analysis tree from the flattened chord?
+Do operations on this tree correspond to well known operations in music theory?
+Can normal music theory be explained in terms of these trees?
+
+In part2.xtm, I created such an algorithm, though it uses a greedy heuristic in finding the most consonant intervals first.
+
+Now I will ask the the second question.
+So we will be playing with some trees.
+
+Consider once again the following trees for Imaj7.
+
+    M3
+   / \
+  P5 P5
+ / \ / \
+U  U U  U
+
+  M3
+/    \
+U    m3
+    /  \
+   U   M3
+       /\
+      U  U
+
+    M7
+   / \
+  P5  U
+ / \
+M3  U
+/\
+UU
+
+ (M3 (P5 U U) (P5 U U))
+ (P5 (M3 U U) (M3 U U))
+ (M3 U (m3 U (M3 U U)))
+ (M7 (P5 (M3 U U) U) U)
+ (M7 (M3 (P5 U U) U) U)
+ (M3 U (P5 (m3 U U) U))
+ (M7 (M3 U (m3 U U)) U)
+ (M3 (M7 U U) (m3 U U))
+
+What happens when we take the mirror image of these trees?
+
+|#

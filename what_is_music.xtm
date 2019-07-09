@@ -41,13 +41,13 @@ It is these perspective that lead me to formulate following characterization of 
 
 (play-note (+ (now) 100) synth 60 100 *second*)
 
-(define chord
+(define play-chord
   (lambda (notes)
     (if (not (null? notes))
         (begin (play-note (now) synth (car notes) 100 *second*)
-               (chord (cdr notes))))))
+               (play-chord (cdr notes))))))
 
-(chord '(60 65 68 71))
+(play-chord '(60 65 68 71))
 
 (bind-func play-freq-at-time
   (lambda (time freq samples)
@@ -176,7 +176,7 @@ What if we thought of a chord, not a flat collection of notes as a sequence of p
         (else (list x))))
 
 (define (play-equal-temp chrd)
-  (chord (flatten chrd)))
+  (play-chord (flatten chrd)))
 
 (define Imaj7
   (M3 (P5 U U) (P5 U U)))
