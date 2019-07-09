@@ -103,14 +103,14 @@ Adding, because the farther apart the notes are, the more they are distinguishab
               (3 . 6)
               (8 . 7)
               (2 . 8)
-              (1 . 9)
-              (11 . 10)
-              (6 . 11))))))
+              (10 . 9)
+              (1 . 10)
+              (11 . 11)
+              (6 . 12))))))
 
--- (cost 13) -> 10 = 1 + 9 = octave + m2
-(cost 13)
-(cost 0)
-(cost 36)
+(cost 13) -- (cost 1) + (cost 12) = 10 + 1 = 11
+(cost 0)  -- 0
+(cost 36) -- 3 * (cost 12) = 3
 
 #|
 How to get the cost of the whole tree?
@@ -201,29 +201,28 @@ The number of trees is invariant on our particular choice of notes.
 
 This number probably blows up really quickly.
 Consider the following greedy algo:
-built_trees = '() <-- assoc list of left-most leaf to tree
-available_notes = (flat list of notes in chord) -- eg '(0 7 4 11)
-while len(available_notes) > 1:
-  note_pairs = '((a,b) in (available_notes * available_notes) st a < b)
-  interval = (most consonant interval with a match in note_pairs)
+built-trees = '() <-- assoc list of left-most leaf to tree
+available-notes = (flat list of notes in chord) -- eg '(0 7 4 11)
+while len(available-notes) > 1:
+  note-pairs = '((a,b) in (available-notes * available-notes) st a < b)
+  interval = (most consonant interval with a match in note-pairs)
   matched_note_pair = (some note_pair '(a,b) st b - a == interval)
 
-  if ((a in built_trees.keys()) and (b in built_trees.keys())):
-    built_trees[a] = (list built_trees[a] built_trees[b])
-    available_notes.remove(b)
-  elif (a in built_trees.keys()):
-    built_trees[a] = (list built_trees[a] b)
-    available_notes.remove(b)
-  elif (b in built_trees.keys()):
-    built_trees[b] = (list b build_trees[a])
-    built_trees.remove(a)
-    available_notes.remove(a)
-    available_notes.append(b)
+  if ((a in built-trees.keys()) and (b in built-trees.keys())):
+    built-trees[a] = (list built-trees[a] built-trees[b])
+    available-notes.remove(b)
+  elif (a in built-trees.keys()):
+    built-trees[a] = (list built-trees[a] b)
+    available-notes.remove(b)
+  elif (b in built-trees.keys()):
+    built-trees[a] = (list a build_trees[b])
+    built-trees.remove(b)
+    available-notes.remove(b)
   else:
     build_trees[a] = (list a b)
-    available_notes.remove(b)
+    available-notes.remove(b)
 
-return available_notes[min(chord)]
+return available-notes[min(chord)]
 |#
 
 (define (assoc-ref key assoc_list)
@@ -264,26 +263,25 @@ return available_notes[min(chord)]
 (get-note-pairs '(0 4 7)) -- ((0 . 4) (4 . 7) (0 . 7))
 (get-note-pairs '(0 4 7 11)) -- ((0 . 4) (0 . 7) (0 . 11) (4 . 7) (4 . 11) (7 . 11))
 
-
 (define (make-intervals-list num-octaves)
  (define (make-intervals-list-helper orig num-octaves num-iters accum)
    (if (> num-octaves 0)
        (make-intervals-list-helper orig (- num-octaves 1) (+ num-iters 1)
                                    (append accum (map (lambda (x) (+ x (* 12 num-iters))) orig)))
        accum))
- (make-intervals-list-helper '(0 7 5 4 9 3 8 2 1 11 6) num-octaves 0 '()))
+ (make-intervals-list-helper '(0 7 5 4 9 3 8 2 10 1 11 6) num-octaves 0 '()))
 
 (make-intervals-list 2)
 
-(define (get-matched-note-pair note_pairs intervals)
-  (if (null? intervals) '()
+(define (get-matched-note-pair note-pairs intervals)
+  (if (null? intervals) (begin (println "empty") '())
       (let* ((interval (car intervals))
-             (matches (filter (lambda (p) (= interval (- (cdr p) (car p)))) note_pairs)))
+             (matches (filter (lambda (p) (= interval (- (cdr p) (car p)))) note-pairs)))
         (if (null? matches)
-            (get-matched-note-pair note_pairs (cdr intervals))
+            (get-matched-note-pair note-pairs (cdr intervals))
             (car matches)))))
 
-(get-matched-note-pair '((1 . 2) (2 . 4)) '(3 2)) -- '(2 . 4)
+(get-matched-note-pair '((1 . 2) (2 . 4)) '(3 2)) -- (2 . 4)
 
 (define (logical-or p q)
   (cond (p #t)
@@ -303,19 +301,82 @@ return available_notes[min(chord)]
 (in? 1 '(2 1 3)) -- #t
 (in? 4 '(2 1 3)) -- #f
 
+
+(define (delq elem lst)
+  (filter (lambda (x) (not (= x elem))) lst))
+
+(delq 1 '(2 1 1 3))
+
+(delq 'b '(a b c d))
+(get-note-pairs '(1 3 4 5))
+(make-intervals-list 1)
+(let ((pair (get-matched-note-pair (get-note-pairs '(1 3 4 5)) (make-intervals-list 1))))
+  (cdr pair))
+
+(let ((a 1))
+  (cons (cons a 2) '()))
+
+(define (del-assoc object alist)
+  (filter (lambda (p) (not (= object (car p)))) alist))
+
+(del-assoc 1 '((2 . 3) (1 . 4))) -- ((2 . 3))
+
 (define (parenthesize chord)
-  ((define (parenthesize-helper built_trees available_notes)
-     (if (> (length available_notes) 1)
-         (let* ((note_pairs (get-note-pairs available_notes))
+  (define (parenthesize-helper built-trees available-notes)
+     (if (> (length available-notes) 1)
+         (let* ((note-pairs (get-note-pairs available-notes))
                 (intervals (make-intervals-list 2))
                 (matched-note-pair (get-matched-note-pair note-pairs intervals))
                 (a (car matched-note-pair))
                 (b (cdr matched-note-pair))
-                (built-tree-keys (map car built_trees)))
+                (built-tree-keys (map car built-trees)))
            (cond ((logical-and (in? a built-tree-keys) (in? b built-tree-keys))
+                    (let* ((a-tree (assoc-ref a built-trees))
+                           (b-tree (assoc-ref b built-trees))
+                           (new-built-trees (cons (cons a (list a-tree b-tree))
+                                                   (del-assoc a (del-assoc b built-trees)))))
+                      (parenthesize-helper new-built-trees (delq b available-notes))))
 
+                 ((in? a built-tree-keys)
+                  (let* ((a-tree (assoc-ref a built-trees))
+                         (new-built-trees (cons (cons a (list a-tree b))
+                                                 (del-assoc a built-trees))))
+                    (parenthesize-helper new-built-trees (delq b available-notes))))
 
-                  )
-           )
-           (assoc-ref (car available_notes) built_trees))
-    (parenthesize-helper '() chord))))
+                 ((in? b built-tree-keys)
+                  (let* ((b-tree (assoc-ref b built-trees))
+                         (new-built-trees (cons (cons a (list a b-tree))
+                                                 (del-assoc b built-trees))))
+                    (parenthesize-helper new-built-trees (delq b available-notes))))
+
+                 (else
+                  (let ((new-built-trees (cons (cons a (list a b)) built-trees)))
+                    (parenthesize-helper new-built-trees (delq b available-notes))))))
+
+           (assoc-ref (car available-notes) built-trees)))
+
+    (parenthesize-helper '() chord))
+
+(parenthesize '(0 4 7 11)) -- ((0 7) (4 11))
+(parenthesize '(0 4 11 7)) -- ((0 7) (4 11))
+(parenthesize '(11 7 0 4)) -- ((0 7) (4 11))
+
+(parenthesize '(0 4 7)) -- ((0 7) 4)
+(tree-cost '((0 7) 4))
+(tree-cost '(0 (4 7))) -- chose the better one
+
+(parenthesize '(0 3 7 10)) -- ((0 7) (3 10))
+(parenthesize '(0 2 5 7))  -- (((0 7) 5) 2)
+(tree-cost '(((0 7) 5) 2)) -- 12 <-- chose the better one
+(tree-cost '((0 5) (2 7))) -- 13
+
+(parenthesize '(0 4 7 10)) -- (((0 7) 4) 10)
+(tree-cost '(((0 7) 4) 10)) -- 15
+(tree-cost '((0 4) (7 10))) -- 12 <-- did not pick best here
+-- maybe could bias toward building balanced trees, but for now, good enough
+
+(define (note-tree-to-intervals note-tree)
+  ()
+  )
+
+(note-tree-to-intervals '((0 7) (4 11))) --  (4 (7 U U) (7 U U))
